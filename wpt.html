@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+
+  <title>WPT local browser</title>
+  <meta name="description" content="WPT local browser">
+
+  <style>
+    tr:nth-child(even) {
+      background-color: #f2f2f2;
+    }
+    .pass {
+      background-color: limegreen !important;
+    }
+    .fail {
+      background-color: firebrick !important;
+    }
+
+    .results {
+      font-family: "Lucida Console", Monaco, monospace;
+    }
+  </style>
+
+</head>
+
+<body>
+  <label>Virtual: <select id="suite"><option value="base">base</option></select></label>
+  <label>Filter: <input type="text" id="filter"></label>
+  <label><input type="checkbox" id="hidepass" checked>Hide PASS</label>
+  <div id="meta" style="float:right"></div>
+  <br>
+  <div id="testlist"></div>
+  <script src="wptdata.js"></script>
+  <script async>
+    function get_test_result(name, suite) {
+      let test_info = tests["results"][name];
+      if(test_info) {
+        if(test_info[suite]) {
+          test_info = test_info[suite];
+        } else {
+          test_info = test_info["base"];
+        }
+      }
+      return test_info;
+    }
+
+    function filter() {
+      const filter_input = document.getElementById("filter");
+      const re = new RegExp(filter_input.value);
+
+      const hidepass_checkbox = document.getElementById("hidepass");
+
+      const testlist = document.getElementById("testlist");
+      while (testlist.hasChildNodes()) {
+        testlist.removeChild(testlist.firstChild);
+      }
+
+      const table = document.createElement("table");
+      const header = document.createElement("tr");
+      table.appendChild(header);
+      header.innerHTML = "<th>Name</th><th>Result</th><th>Base Result</th>";
+
+      const current_suite = document.getElementById("suite").value;
+
+      for(const t in tests["results"]) {
+        if(!re.test(t)) continue;
+
+        const test_info = get_test_result(t, current_suite);
+        const base_test_info = get_test_result(t, "base");
+        const line = document.createElement("tr");
+
+        if(test_info == null || test_info.fail == 0) {
+          if(hidepass_checkbox.checked) continue;
+          line.classList.add("pass");
+          line.innerHTML = "<td>" + t + "</td><td>PASS</td>";
+        } else {
+          line.innerHTML = "<td><a onclick=\"javascript:toggle_result(this, '" + t + "')\">" + t + "</a></td><td>" + test_info.pass + "&nbsp;/&nbsp;" + (test_info.pass + test_info.fail) + "</td>";
+        }
+        if(test_info && test_info.expected != base_test_info.expected) {
+          if(base_test_info == null || base_test_info.fail == 0) {
+            line.innerHTML += "<td>PASS</td>";
+          } else {
+            line.innerHTML += "<td>" + base_test_info.pass + "&nbsp;/&nbsp;" + (base_test_info.pass + base_test_info.fail) + "</td>";
+          }
+        } else {
+          line.innerHTML += "<td></td>";
+        }
+
+        table.appendChild(line);
+      }
+      testlist.appendChild(table);
+    }
+
+    function toggle_result(a, name) {
+      if(a.nextSibling) {
+        a.parentNode.removeChild(a.nextSibling);
+      } else {
+        const div = document.createElement("div");
+        div.classList.add("results");
+
+        const current_suite = document.getElementById("suite").value;
+        let test_info = tests["results"][name];
+        if(test_info) {
+          if(test_info[current_suite]) {
+            test_info = test_info[current_suite];
+          } else {
+            test_info = test_info["base"];
+          }
+        }
+
+        for(const line of test_info.lines) {
+          const innerdiv = document.createElement("div");
+          innerdiv.textContent = line;
+          if(line.startsWith("PASS")) {
+            innerdiv.classList.add("pass");
+          } else {
+            innerdiv.classList.add("fail");
+          }
+          div.appendChild(innerdiv);
+        }
+        a.parentNode.appendChild(div);
+      }
+    }
+
+    (async () => {
+      const filter_text = document.getElementById("filter");
+      filter_text.onchange = () => {
+        filter();
+      }
+      document.getElementById("hidepass").onchange = () => {
+        filter();
+      }
+      const virtual_dropdown = document.getElementById("suite");
+      virtual_dropdown.onchange = () => {
+        const virtual_name = virtual_dropdown.value;
+        if (virtual_name != "base") {
+          const new_filter = tests['virtual'][virtual_name].join('|');
+          filter_text.value = new_filter;
+        } else {
+          filter_text.value = "";
+        }
+        filter();
+      }
+      for(const virtual_name in tests['virtual']) {
+        const option = document.createElement("option");
+        option.value = virtual_name;
+        option.textContent = virtual_name;
+        virtual_dropdown.appendChild(option);
+      }
+
+      const meta_div = document.getElementById("meta");
+      meta_div.textContent = `Generated: ${tests["meta"]["date"]} | Hash: ${tests["meta"]["hash"]}`;
+
+      filter();
+    })();
+  </script>
+</body>
+</html>
