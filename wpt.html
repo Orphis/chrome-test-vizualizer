@@ -25,10 +25,11 @@
 </head>
 
 <body>
-  <label>Virtual: <select id="suite"><option value="base">base</option></select></label>
-  <label>Filter: <input type="text" id="filter"></label>
-  <label><input type="checkbox" id="hidepass" checked>Hide PASS</label>
-  <div id="meta" style="float:right"></div>
+  <label>Virtual <select id="suite"><option value="base">base</option></select></label>
+  <label>File filter <input type="text" id="filefilter" placeholder="File filter regexp"></label>
+  <label>Output filter <input type="text" id="outputfilter" placeholder="Output filter regexp"></label>
+  <label><input type="checkbox" id="filehidepass" checked>Hide PASS</label>
+  <div id="meta"></div>
   <br>
   <div id="testlist"></div>
   <script src="wptdata.js"></script>
@@ -46,10 +47,17 @@
     }
 
     function filter() {
-      const filter_input = document.getElementById("filter");
-      const re = new RegExp(filter_input.value);
+      const file_filter_input = document.getElementById("filefilter");
+      let file_filter_re;
+      if(file_filter_input.value != "")
+        file_filter_re = new RegExp(file_filter_input.value);
 
-      const hidepass_checkbox = document.getElementById("hidepass");
+      const file_hidepass_checkbox = document.getElementById("filehidepass");
+
+      const output_filter_input = document.getElementById("outputfilter");
+      let output_filter_re;
+      if(output_filter_input.value != "")
+        output_filter_re = new RegExp(output_filter_input.value);
 
       const testlist = document.getElementById("testlist");
       while (testlist.hasChildNodes()) {
@@ -59,23 +67,29 @@
       const table = document.createElement("table");
       const header = document.createElement("tr");
       table.appendChild(header);
-      header.innerHTML = "<th>Name</th><th>Result</th><th>Base Result</th>";
+      header.innerHTML = "<th style='width:100%'>Name</th><th>Result</th><th>Base Result</th>";
 
       const current_suite = document.getElementById("suite").value;
 
       for(const t in tests["results"]) {
-        if(!re.test(t)) continue;
+        if(file_filter_re && !file_filter_re.test(t)) continue;
 
         const test_info = get_test_result(t, current_suite);
         const base_test_info = get_test_result(t, "base");
+
+        if(output_filter_re) {
+          if(!test_info || !test_info.lines.some(line => output_filter_re.test(line)))
+            continue;
+        }
+
         const line = document.createElement("tr");
 
         if(test_info == null || test_info.fail == 0) {
-          if(hidepass_checkbox.checked) continue;
+          if(file_hidepass_checkbox.checked) continue;
           line.classList.add("pass");
-          line.innerHTML = "<td>" + t + "</td><td>PASS</td>";
+          line.innerHTML = "<td style='width:100%'>" + t + "</td><td>PASS</td>";
         } else {
-          line.innerHTML = "<td><a onclick=\"javascript:toggle_result(this, '" + t + "')\">" + t + "</a></td><td>" + test_info.pass + "&nbsp;/&nbsp;" + (test_info.pass + test_info.fail) + "</td>";
+          line.innerHTML = "<td style='width:100%'><a onclick=\"javascript:toggle_result(this, '" + t + "')\">" + t + "</a></td><td>" + test_info.pass + "&nbsp;/&nbsp;" + (test_info.pass + test_info.fail) + "</td>";
         }
         if(test_info && test_info.expected != base_test_info.expected) {
           if(base_test_info == null || base_test_info.fail == 0) {
@@ -96,20 +110,20 @@
       if(a.nextSibling) {
         a.parentNode.removeChild(a.nextSibling);
       } else {
+        const output_filter_input = document.getElementById("outputfilter");
+        let output_filter_re;
+        if(output_filter_input.value != "")
+          output_filter_re = new RegExp(output_filter_input.value);
+
         const div = document.createElement("div");
         div.classList.add("results");
 
         const current_suite = document.getElementById("suite").value;
-        let test_info = tests["results"][name];
-        if(test_info) {
-          if(test_info[current_suite]) {
-            test_info = test_info[current_suite];
-          } else {
-            test_info = test_info["base"];
-          }
-        }
+        let test_info = get_test_result(name, current_suite);
 
         for(const line of test_info.lines) {
+          if(output_filter_re && !output_filter_re.test(line)) continue;
+
           const innerdiv = document.createElement("div");
           innerdiv.textContent = line;
           if(line.startsWith("PASS")) {
@@ -124,21 +138,26 @@
     }
 
     (async () => {
-      const filter_text = document.getElementById("filter");
-      filter_text.onchange = () => {
+      const file_filter_input = document.getElementById("filefilter");
+      file_filter_input.onchange = () => {
         filter();
       }
-      document.getElementById("hidepass").onchange = () => {
+      document.getElementById("filehidepass").onchange = () => {
         filter();
       }
+      const output_filter_input = document.getElementById("outputfilter");
+      output_filter_input.onchange = () => {
+        filter();
+      }
+
       const virtual_dropdown = document.getElementById("suite");
       virtual_dropdown.onchange = () => {
         const virtual_name = virtual_dropdown.value;
         if (virtual_name != "base") {
           const new_filter = tests['virtual'][virtual_name].join('|');
-          filter_text.value = new_filter;
+          file_filter_input.value = new_filter;
         } else {
-          filter_text.value = "";
+          file_filter_input.value = "";
         }
         filter();
       }
