@@ -46,6 +46,26 @@
       return test_info;
     }
 
+    function filter_test_output(test_info, re) {
+      let pass_count = null;
+      let fail_count = null;
+
+      const lines = test_info ? test_info.lines.filter(line => {
+        return !re || re.test(line);
+      }) : [];
+
+      [pass_count, fail_count] = lines.reduce((accumulator, current) => {
+        if(current.startsWith("PASS")) {
+          accumulator[0] += 1;
+        } else {
+          accumulator[1] += 1;
+        }
+        return accumulator;
+      }, [0, 0]);
+
+      return { "lines": lines, "pass": pass_count, "fail": fail_count };
+    }
+
     function filter() {
       const file_filter_input = document.getElementById("filefilter");
       let file_filter_re;
@@ -77,26 +97,35 @@
         const test_info = get_test_result(t, current_suite);
         const base_test_info = get_test_result(t, "base");
 
-        if(output_filter_re) {
-          if(!test_info || !test_info.lines.some(line => output_filter_re.test(line)))
-            continue;
-        }
+        const filtered_test_info = filter_test_output(test_info, output_filter_re);
+        if(output_filter_re && !filtered_test_info.lines.length) continue;
+        const filtered_base_test_info = test_info == base_test_info ? filtered_test_info
+                                                                    : filter_test_output(base_test_info, output_filter_re);
+
+        if(filtered_test_info.fail == 0 && file_hidepass_checkbox.checked) continue;
+
+        // If we don't know how many tests there are because they all passed,
+        // look it up in the other suite and adjust the passing numbers when possible
+        const test_count = filtered_test_info.pass + filtered_test_info.fail;
+        const base_test_count = filtered_base_test_info.pass + filtered_base_test_info.fail;
+        const real_test_count = Math.max(test_count, base_test_count);
+        if(test_count != real_test_count && !filtered_test_info.pass && !filtered_test_info.fail)
+          filtered_test_info.pass = real_test_count;
+        if(base_test_count != real_test_count && !filtered_base_test_info.pass && filtered_base_test_info.fail)
+          filtered_base_test_info.pass = real_test_count;
 
         const line = document.createElement("tr");
 
-        if(test_info == null || test_info.fail == 0) {
-          if(file_hidepass_checkbox.checked) continue;
-          line.classList.add("pass");
-          line.innerHTML = "<td style='width:100%'>" + t + "</td><td>PASS</td>";
-        } else {
-          line.innerHTML = "<td style='width:100%'><a onclick=\"javascript:toggle_result(this, '" + t + "')\">" + t + "</a></td><td>" + test_info.pass + "&nbsp;/&nbsp;" + (test_info.pass + test_info.fail) + "</td>";
-        }
-        if(test_info && test_info.expected != base_test_info.expected) {
-          if(base_test_info == null || base_test_info.fail == 0) {
-            line.innerHTML += "<td>PASS</td>";
-          } else {
-            line.innerHTML += "<td>" + base_test_info.pass + "&nbsp;/&nbsp;" + (base_test_info.pass + base_test_info.fail) + "</td>";
-          }
+        const classes = !filtered_test_info.fail ? "pass" : "";
+        line.innerHTML = "<td style='width:100%' class='" + classes + "'><a onclick=\"javascript:toggle_result(this, '" + t + "')\">" + t + "</a></td>";
+
+        const pass_string = real_test_count == 0 ? "PASS" : filtered_test_info.pass + "&nbsp;/&nbsp;" + real_test_count;
+        line.innerHTML += "<td class='" + classes + "'>" + pass_string + "</td>";
+
+        if((!!test_info != !!base_test_info) || (test_info && base_test_info && test_info.expected != base_test_info.expected)) {
+          const classes = !filtered_base_test_info.fail ? "pass" : "";
+          const pass_string = real_test_count == 0 ? "PASS" : filtered_base_test_info.pass + "&nbsp;/&nbsp;" + real_test_count;
+          line.innerHTML += "<td class='" + classes + "'>" + pass_string + "</td>";
         } else {
           line.innerHTML += "<td></td>";
         }
@@ -120,6 +149,7 @@
 
         const current_suite = document.getElementById("suite").value;
         let test_info = get_test_result(name, current_suite);
+        if(!test_info) return;
 
         for(const line of test_info.lines) {
           if(output_filter_re && !output_filter_re.test(line)) continue;
