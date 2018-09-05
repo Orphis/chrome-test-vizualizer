@@ -31,7 +31,7 @@ for dir, dirnames, filenames in os.walk(src_path):
 
         all_files.append(os.path.join(dir, file))
 
-        if file.endswith(".html"):
+        if file.endswith(".html") or file.endswith(".window.js"):
             test_files.add(file)
 
         if file.endswith("-expected.txt"):
@@ -52,7 +52,7 @@ for dir, dirnames, filenames in os.walk(src_path):
 output["results"] = {}
 
 for test_file in test_files:
-    expected_path = test_file[:-5] + "-expected.txt"
+    expected_path = os.path.splitext(test_file)[0] + "-expected.txt"
     test_file = os.path.relpath(test_file, src_path)
     if expected_path in expected_files:
         output["results"][test_file] = {}
